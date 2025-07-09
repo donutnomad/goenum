@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go build:*)",
+      "Bash(./goenum test_enum.go)",
+      "Bash(./goenum:*)",
+      "Bash(find:*)",
+      "Bash(ls:*)",
+      "Bash(go run:*)",
+      "Bash(rm:*)",
+      "Bash(mv:*)",
+      "Bash(./generator test_complex.go)"
+    ],
+    "deny": []
+  }
+}
