@@ -9,7 +9,9 @@
       "Bash(go run:*)",
       "Bash(rm:*)",
       "Bash(mv:*)",
-      "Bash(./generator test_complex.go)"
+      "Bash(./generator test_complex.go)",
+      "Bash(make:*)",
+      "Bash(sed:*)"
     ],
     "deny": []
   }

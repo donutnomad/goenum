@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql/driver"
 	"github.com/donutnomad/goenum/enums"
+	main2 "github.com/donutnomad/goenum/test2"
 	"iter"
 )
 
@@ -57,7 +58,7 @@ var Tokenrequests = tokenRequestStatusContainer{
 		tokenRequestStatus: step1Failed,
 	},
 	Step1Canceled: TokenRequestStatus{
-		tokenRequestStatus: step1Canceled,
+		tokenRequestStatus: main2.step1Canceled,
 	},
 	Step2WaitingPayment: TokenRequestStatus{
 		tokenRequestStatus: step2WaitingPayment,
@@ -84,20 +85,97 @@ var Tokenrequests = tokenRequestStatusContainer{
 
 // tokenrequeststatusNamesMap maps enum values to their names array
 var tokenrequeststatusNamesMap = map[TokenRequestStatus][]string{
-	Tokenrequests.Invalid:               {},
-	Tokenrequests.Step1Initialized:      {},
-	Tokenrequests.Step1MarkAllowed:      {},
-	Tokenrequests.Step1MarkDenied:       {},
-	Tokenrequests.Step1Denied:           {},
-	Tokenrequests.Step1Failed:           {},
-	Tokenrequests.Step1Canceled:         {},
-	Tokenrequests.Step2WaitingPayment:   {},
-	Tokenrequests.Step2WaitingTxConfirm: {},
-	Tokenrequests.Step2Failed:           {},
-	Tokenrequests.Step3Initialized:      {},
-	Tokenrequests.Step3MarkAllowed:      {},
-	Tokenrequests.Step3Failed:           {},
-	Tokenrequests.Step4Success:          {},
+	Tokenrequests.Invalid: {
+		"invalid",
+	},
+	Tokenrequests.Step1Initialized: {
+		"started",
+		"init",
+		"begin",
+	},
+	Tokenrequests.Step1MarkAllowed: {
+		"allowed",
+		"approved",
+	},
+	Tokenrequests.Step1MarkDenied: {
+		"denied",
+		"rejected",
+	},
+	Tokenrequests.Step1Denied: {
+		"denied",
+		"rejected",
+	},
+	Tokenrequests.Step1Failed: {
+		"failed",
+		"error",
+	},
+	Tokenrequests.Step1Canceled: {
+		"canceled",
+		"cancelled",
+	},
+	Tokenrequests.Step2WaitingPayment: {
+		"waiting",
+		"payment",
+	},
+	Tokenrequests.Step2WaitingTxConfirm: {
+		"confirm",
+		"waiting",
+	},
+	Tokenrequests.Step2Failed: {
+		"failed",
+		"error",
+	},
+	Tokenrequests.Step3Initialized: {
+		"init",
+		"step3",
+	},
+	Tokenrequests.Step3MarkAllowed: {
+		"allowed",
+		"approved",
+	},
+	Tokenrequests.Step3Failed: {
+		"failed",
+		"error",
+	},
+	Tokenrequests.Step4Success: {
+		"success",
+		"completed",
+		"done",
+	},
+}
+
+// tokenrequeststatusTagsMap maps enum values to their tags array
+var tokenrequeststatusTagsMap = map[TokenRequestStatus][]string{
+	Tokenrequests.Step1MarkAllowed: {
+		"mark",
+		"step1",
+	},
+	Tokenrequests.Step1MarkDenied: {
+		"mark",
+		"step1",
+	},
+	Tokenrequests.Step1Failed: {
+		"failed",
+	},
+	Tokenrequests.Step2WaitingPayment: {
+		"step2",
+	},
+	Tokenrequests.Step2WaitingTxConfirm: {
+		"step2",
+	},
+	Tokenrequests.Step2Failed: {
+		"failed",
+	},
+	Tokenrequests.Step3Initialized: {
+		"step3",
+	},
+	Tokenrequests.Step3MarkAllowed: {
+		"mark",
+		"step3",
+	},
+	Tokenrequests.Step3Failed: {
+		"failed",
+	},
 }
 
 // TokenrequestsRaw is a type alias for the underlying enum type tokenRequestStatus.
@@ -146,6 +224,9 @@ func (t TokenRequestStatus) All() iter.Seq[TokenRequestStatus] {
 
 // IsValid implements the Enum interface.
 func (t TokenRequestStatus) IsValid() bool {
+	if t.tokenRequestStatus == Tokenrequests.Invalid.tokenRequestStatus {
+		return false
+	}
 	return true
 }
 
@@ -213,17 +294,132 @@ func (t TokenRequestStatus) FromValue(value int) (TokenRequestStatus, bool) {
 	return zero, false
 }
 
+// MarkSlice returns all enum values that have the "mark" tag.
+func (t tokenRequestStatusContainer) MarkSlice() []TokenRequestStatus {
+	var result []TokenRequestStatus
+	for _, v := range t.allSlice() {
+		if v.IsMark() {
+			result = append(result, v)
+		}
+	}
+	return result
+}
+
+// IsMark returns true if this enum value has the "mark" tag.
+func (t TokenRequestStatus) IsMark() bool {
+	if tags, ok := tokenrequeststatusTagsMap[t]; ok {
+		for _, tag := range tags {
+			if tag == "mark" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// Step1Slice returns all enum values that have the "step1" tag.
+func (t tokenRequestStatusContainer) Step1Slice() []TokenRequestStatus {
+	var result []TokenRequestStatus
+	for _, v := range t.allSlice() {
+		if v.IsStep1() {
+			result = append(result, v)
+		}
+	}
+	return result
+}
+
+// IsStep1 returns true if this enum value has the "step1" tag.
+func (t TokenRequestStatus) IsStep1() bool {
+	if tags, ok := tokenrequeststatusTagsMap[t]; ok {
+		for _, tag := range tags {
+			if tag == "step1" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// FailedSlice returns all enum values that have the "failed" tag.
+func (t tokenRequestStatusContainer) FailedSlice() []TokenRequestStatus {
+	var result []TokenRequestStatus
+	for _, v := range t.allSlice() {
+		if v.IsFailed() {
+			result = append(result, v)
+		}
+	}
+	return result
+}
+
+// IsFailed returns true if this enum value has the "failed" tag.
+func (t TokenRequestStatus) IsFailed() bool {
+	if tags, ok := tokenrequeststatusTagsMap[t]; ok {
+		for _, tag := range tags {
+			if tag == "failed" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// Step2Slice returns all enum values that have the "step2" tag.
+func (t tokenRequestStatusContainer) Step2Slice() []TokenRequestStatus {
+	var result []TokenRequestStatus
+	for _, v := range t.allSlice() {
+		if v.IsStep2() {
+			result = append(result, v)
+		}
+	}
+	return result
+}
+
+// IsStep2 returns true if this enum value has the "step2" tag.
+func (t TokenRequestStatus) IsStep2() bool {
+	if tags, ok := tokenrequeststatusTagsMap[t]; ok {
+		for _, tag := range tags {
+			if tag == "step2" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// Step3Slice returns all enum values that have the "step3" tag.
+func (t tokenRequestStatusContainer) Step3Slice() []TokenRequestStatus {
+	var result []TokenRequestStatus
+	for _, v := range t.allSlice() {
+		if v.IsStep3() {
+			result = append(result, v)
+		}
+	}
+	return result
+}
+
+// IsStep3 returns true if this enum value has the "step3" tag.
+func (t TokenRequestStatus) IsStep3() bool {
+	if tags, ok := tokenrequeststatusTagsMap[t]; ok {
+		for _, tag := range tags {
+			if tag == "step3" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // All container methods for convenience
 func (t tokenRequestStatusContainer) All() iter.Seq[TokenRequestStatus] {
-	return Tokenrequests.allSlice()[0].All()
+	return TokenRequestStatus{}.All()
 }
 
 func (t tokenRequestStatusContainer) FromName(name string) (TokenRequestStatus, bool) {
-	return Tokenrequests.allSlice()[0].FromName(name)
+	return TokenRequestStatus{}.FromName(name)
 }
 
 func (t tokenRequestStatusContainer) FromValue(value int) (TokenRequestStatus, bool) {
-	return Tokenrequests.allSlice()[0].FromValue(value)
+	return TokenRequestStatus{}.FromValue(value)
 }
 
 // Scan implements the database/sql.Scanner interface for TokenRequestStatus.
@@ -260,24 +456,57 @@ func (t *TokenRequestStatus) UnmarshalJSON(data []byte) error {
 func (t TokenRequestStatus) CanTransitionTo(target TokenRequestStatus) bool {
 	transitions := t.ValidTransitions()
 	for _, validTarget := range transitions {
-		if validTarget.tokenRequestStatus == target.tokenRequestStatus {
+		if validTarget == target {
 			return true
 		}
 	}
 	return false
 }
 
-// ValidTransitions returns all vazlid target states that this state can transition to.
+// ValidTransitions returns all valid target states that this state can transition to.
 func (t TokenRequestStatus) ValidTransitions() []TokenRequestStatus {
+	if t == Tokenrequests.Step1Initialized {
+		return []TokenRequestStatus{
+			Tokenrequests.Step1Canceled,
+			Tokenrequests.Step1MarkAllowed,
+		}
+	}
+	if t == Tokenrequests.Step3Initialized {
+		return []TokenRequestStatus{
+			Tokenrequests.Step3MarkAllowed,
+		}
+	}
+	if t == Tokenrequests.Step3MarkAllowed {
+		return []TokenRequestStatus{
+			Tokenrequests.Step4Success,
+		}
+	}
 	return []TokenRequestStatus{}
 }
 
 // IsTerminalState returns true if this state is a terminal (final) state.
 func (t TokenRequestStatus) IsTerminalState() bool {
+	if t == Tokenrequests.Step1Denied {
+		return true
+	}
+	if t == Tokenrequests.Step1Canceled {
+		return true
+	}
+	if t == Tokenrequests.Step3Failed {
+		return true
+	}
+	if t == Tokenrequests.Step4Success {
+		return true
+	}
 	return false
 }
 
 // TerminalStateSlice returns a slice of all terminal states.
 func (t TokenRequestStatus) TerminalStateSlice() []TokenRequestStatus {
-	return []TokenRequestStatus{}
+	return []TokenRequestStatus{
+		Tokenrequests.Step1Denied,
+		Tokenrequests.Step1Canceled,
+		Tokenrequests.Step3Failed,
+		Tokenrequests.Step4Success,
+	}
 }

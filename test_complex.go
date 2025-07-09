@@ -45,14 +45,17 @@ const (
 
 	// init,step3
 	// tag: step3
+	// state: -> step3MarkAllowed
 	step3Initialized tokenRequestStatus = 3000
 
 	// allowed,approved
 	// tag: mark,step3
+	// state: -> step4Success
 	step3MarkAllowed tokenRequestStatus = 3001
 
 	// failed,error
 	// tag: failed
+	// state: [final]
 	step3Failed tokenRequestStatus = 8030
 
 	// success,completed,done

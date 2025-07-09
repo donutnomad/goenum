@@ -314,10 +314,11 @@ func generateEnumWithTemplate(enum EnumInfo) error {
 const enumTemplate = `package {{.PackageName}}
 
 import (
-	"iter"
-	"github.com/donutnomad/goenum/enums"
-	{{- if .Options.SQL}}
 	"database/sql/driver"
+	"fmt"
+	"github.com/donutnomad/goenum/enums"
+	"iter"
+	{{- if .Options.SQL}}
 	{{- end}}
 	{{- if .Options.YAML}}
 	"gopkg.in/yaml.v3"
@@ -455,7 +456,10 @@ func (t {{.Name}}) Names() []string {
 
 // String implements the Stringer interface.
 func (t {{.Name}}) String() string {
-	return t.Name()
+	if names, ok := {{ToLower .Name}}NamesMap[t]; ok && len(names) > 0 {
+		return names[0]
+	}
+	return fmt.Sprintf("{{.Type}}(%v)", t.{{.Type}})
 }
 
 // SerdeFormat implements the Enum interface.
@@ -472,7 +476,7 @@ func (t {{.Name}}) FromName(name string) ({{.Name}}, bool) {
 	for enumValue, names := range {{ToLower .Name}}NamesMap {
 		for _, n := range names {
 			if n == name {
-				return enumValue, true
+				return enumValue, enumValue.IsValid()
 			}
 		}
 	}
@@ -482,7 +486,7 @@ func (t {{.Name}}) FromName(name string) ({{.Name}}, bool) {
 
 // FromValue implements the Enum interface.
 func (t {{.Name}}) FromValue(value {{.BaseType}}) ({{.Name}}, bool) {
-	for _, v := range {{Title .ContainerName}}.allSlice() {
+	for v := range {{Title .ContainerName}}.All() {
 		if v.Val() == value {
 			return v, true
 		}
@@ -521,15 +525,15 @@ func (t {{$.Name}}) Is{{FirstUpper .}}() bool {
 
 // All container methods for convenience
 func (t {{.Type}}Container) All() iter.Seq[{{.Name}}] {
-	return {{Title .ContainerName}}.allSlice()[0].All()
+	return {{.Name}}{}.All()
 }
 
 func (t {{.Type}}Container) FromName(name string) ({{.Name}}, bool) {
-	return {{Title .ContainerName}}.allSlice()[0].FromName(name)
+	return {{.Name}}{}.FromName(name)
 }
 
 func (t {{.Type}}Container) FromValue(value {{.BaseType}}) ({{.Name}}, bool) {
-	return {{Title .ContainerName}}.allSlice()[0].FromValue(value)
+	return {{.Name}}{}.FromValue(value)
 }
 
 {{- if .Options.SQL}}
