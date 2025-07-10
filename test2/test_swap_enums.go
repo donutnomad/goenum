@@ -19,18 +19,54 @@ var _ enums.Enum[int, SwapStatus] = SwapStatus{}
 // swapStatusContainer is the container for all enum values.
 // It is private and should not be used directly use the public methods on the SwapStatus type.
 type swapStatusContainer struct {
+	// invalid (0)
 	_invalidSwapStatus SwapStatus
+	// pending (1000)
+	// 刚创建swap请求 / 还没有选择counterparty， 或者目标是银行，等待银行的同意
 	Step1Pending SwapStatus
+	// canceled (1030)
+	// 用户自己取消了
+	// state: [final]
 	Step1Canceled SwapStatus
+	// step1_bank_mark_amount (1020)
+	// 银行标记了金额，正在等待checker同意; 如果意见不一致，回到pending
+	// state: -> waitSenderAcceptOrCancel, step1Pending
 	Step1BankMarkAmount SwapStatus
+	// step1_bank_mark_canceled (1021)
+	// 银行标记为取消
+	// state: -> step1CanceledByBank, step1Pending
 	Step1BankMarkCanceled SwapStatus
+	// canceled_by_bank (1031)
+	// 被银行取消了
+	// state: [final]
 	Step1CanceledByBank SwapStatus
+	// wait_counterparty_sign (2000)
+	// 等待counterparty签名，等同于[waitSenderAcceptOrCancel]
+	// state: -> waitSenderBroadcast
 	WaitCounterpartySign SwapStatus
+	// wait_sender_accept_cancel (2000)
+	// 等待发送者接受或者取消; 接受后，系统会自动使用钱包进行签名。
+	// state: -> waitSenderBroadcast
 	WaitSenderAcceptOrCancel SwapStatus
+	// wait_sender_broadcast (3000)
+	// 等待sender执行swap交易
+	// state: -> waitTxConfirm
 	WaitSenderBroadcast SwapStatus
+	// wait_tx_confirm (3001)
+	// 等待tx确认
+	// state: -> success, expired, failed
 	WaitTxConfirm SwapStatus
+	// success (4000)
+	// 成功
+	// state: [final]
 	Success SwapStatus
+	// expired (5000)
+	// 过期(超过了swap的deadline)
+	// state: [final]
 	Expired SwapStatus
+	// failed (6000)
+	// 失败(sender广播交易失败)
+	// state: [final]
 	Failed SwapStatus
 }
 

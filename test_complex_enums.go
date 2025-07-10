@@ -19,19 +19,49 @@ var _ enums.Enum[int, TokenRequestStatus] = TokenRequestStatus{}
 // tokenRequestStatusContainer is the container for all enum values.
 // It is private and should not be used directly use the public methods on the TokenRequestStatus type.
 type tokenRequestStatusContainer struct {
+	// invalid (0)
 	Invalid TokenRequestStatus
+	// started,init,begin (1000)
+	// state: -> step1Canceled, step1MarkAllowed
 	Step1Initialized TokenRequestStatus
+	// allowed,approved (1001)
+	// tag: mark,step1
 	Step1MarkAllowed TokenRequestStatus
+	// denied,rejected (1002)
+	// tag: mark,step1
 	Step1MarkDenied TokenRequestStatus
+	// denied,rejected (7011)
+	// state: [final]
 	Step1Denied TokenRequestStatus
+	// failed,error (8010)
+	// tag: failed
 	Step1Failed TokenRequestStatus
+	// canceled,cancelled (9010)
+	// state: [final]
 	Step1Canceled TokenRequestStatus
+	// waiting,payment (2000)
+	// tag: step2
 	Step2WaitingPayment TokenRequestStatus
+	// confirm,waiting (2001)
+	// tag: step2
 	Step2WaitingTxConfirm TokenRequestStatus
+	// failed,error (8020)
+	// tag: failed
 	Step2Failed TokenRequestStatus
+	// init,step3 (3000)
+	// tag: step3
+	// state: -> step3MarkAllowed
 	Step3Initialized TokenRequestStatus
+	// allowed,approved (3001)
+	// tag: mark,step3
+	// state: -> step4Success
 	Step3MarkAllowed TokenRequestStatus
+	// failed,error (8030)
+	// tag: failed
+	// state: [final]
 	Step3Failed TokenRequestStatus
+	// success,completed,done (4000)
+	// state: [final]
 	Step4Success TokenRequestStatus
 }
 
@@ -296,6 +326,52 @@ func (t TokenRequestStatus) FromValue(value int) (TokenRequestStatus, bool) {
 	return zero, false
 }
 
+// Step2Slice returns all enum values that have the "step2" tag.
+func (t tokenRequestStatusContainer) Step2Slice() []TokenRequestStatus {
+	var result []TokenRequestStatus
+	for _, v := range t.allSlice() {
+		if v.IsStep2() {
+			result = append(result, v)
+		}
+	}
+	return result
+}
+
+// IsStep2 returns true if this enum value has the "step2" tag.
+func (t TokenRequestStatus) IsStep2() bool {
+	if tags, ok := tokenrequeststatusTagsMap[t]; ok {
+		for _, tag := range tags {
+			if tag == "step2" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// Step3Slice returns all enum values that have the "step3" tag.
+func (t tokenRequestStatusContainer) Step3Slice() []TokenRequestStatus {
+	var result []TokenRequestStatus
+	for _, v := range t.allSlice() {
+		if v.IsStep3() {
+			result = append(result, v)
+		}
+	}
+	return result
+}
+
+// IsStep3 returns true if this enum value has the "step3" tag.
+func (t TokenRequestStatus) IsStep3() bool {
+	if tags, ok := tokenrequeststatusTagsMap[t]; ok {
+		for _, tag := range tags {
+			if tag == "step3" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // MarkSlice returns all enum values that have the "mark" tag.
 func (t tokenRequestStatusContainer) MarkSlice() []TokenRequestStatus {
 	var result []TokenRequestStatus
@@ -358,52 +434,6 @@ func (t TokenRequestStatus) IsFailed() bool {
 	if tags, ok := tokenrequeststatusTagsMap[t]; ok {
 		for _, tag := range tags {
 			if tag == "failed" {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// Step2Slice returns all enum values that have the "step2" tag.
-func (t tokenRequestStatusContainer) Step2Slice() []TokenRequestStatus {
-	var result []TokenRequestStatus
-	for _, v := range t.allSlice() {
-		if v.IsStep2() {
-			result = append(result, v)
-		}
-	}
-	return result
-}
-
-// IsStep2 returns true if this enum value has the "step2" tag.
-func (t TokenRequestStatus) IsStep2() bool {
-	if tags, ok := tokenrequeststatusTagsMap[t]; ok {
-		for _, tag := range tags {
-			if tag == "step2" {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// Step3Slice returns all enum values that have the "step3" tag.
-func (t tokenRequestStatusContainer) Step3Slice() []TokenRequestStatus {
-	var result []TokenRequestStatus
-	for _, v := range t.allSlice() {
-		if v.IsStep3() {
-			result = append(result, v)
-		}
-	}
-	return result
-}
-
-// IsStep3 returns true if this enum value has the "step3" tag.
-func (t TokenRequestStatus) IsStep3() bool {
-	if tags, ok := tokenrequeststatusTagsMap[t]; ok {
-		for _, tag := range tags {
-			if tag == "step3" {
 				return true
 			}
 		}

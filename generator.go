@@ -25,14 +25,15 @@ type EnumInfo struct {
 }
 
 type EnumValue struct {
-	Name        string
-	Value       string
-	Comment     string
-	Names       []string
-	IsInvalid   bool
-	Tags        []string
-	Transitions []string
-	IsFinal     bool
+	Name            string
+	Value           string
+	Comment         string
+	OriginalComment string // Raw comment text for display in generated code
+	Names           []string
+	IsInvalid       bool
+	Tags            []string
+	Transitions     []string
+	IsFinal         bool
 }
 
 type EnumOptions struct {
@@ -209,6 +210,7 @@ func parseConstValues(decl *ast.GenDecl, enumType string) []EnumValue {
 
 				if commentText != "" {
 					value.Comment = commentText
+					value.OriginalComment = commentText // Save raw comment for display
 					parseValueComment(&value, commentText)
 				}
 
@@ -306,6 +308,34 @@ func generateEnumWithTemplate(enum EnumInfo) error {
 			}
 			return strings.ToUpper(s[:1]) + s[1:]
 		},
+		"FormatComment": func(comment string, value string) string {
+			if comment == "" {
+				return ""
+			}
+			lines := strings.Split(comment, "\n")
+			var formattedLines []string
+			for i, line := range lines {
+				line = strings.TrimSpace(line)
+				if line == "" {
+					continue
+				}
+				// Remove // prefix if exists and add it back consistently
+				line = strings.TrimPrefix(line, "//")
+				line = strings.TrimSpace(line)
+				if line != "" {
+					if i == 0 {
+						// Add value to the first line
+						formattedLines = append(formattedLines, "// "+line+" ("+value+")")
+					} else {
+						formattedLines = append(formattedLines, "// "+line)
+					}
+				}
+			}
+			if len(formattedLines) > 0 {
+				return strings.Join(formattedLines, "\n\t")
+			}
+			return ""
+		},
 	}).Parse(enumTemplate))
 
 	return tmpl.Execute(w, enum)
@@ -338,6 +368,11 @@ var _ enums.Enum[{{.BaseType}}, {{.Name}}] = {{.Name}}{}
 // It is private and should not be used directly use the public methods on the {{.Name}} type.
 type {{.Type}}Container struct {
 	{{- range .Values}}
+	{{- if .OriginalComment}}
+	{{FormatComment .OriginalComment .Value}}
+	{{- else}}
+	// ({{.Value}})
+	{{- end}}
 	{{Title .Name}} {{$.Name}}
 	{{- end}}
 }
