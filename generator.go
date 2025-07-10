@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"text/template"
 )
@@ -111,7 +112,7 @@ func parseFile(filename string) ([]EnumInfo, error) {
 				end := fset.Position(d.End()).Offset
 				currentEnum.ConstBlock = string(fileContent[start:end])
 				
-				values := parseConstValuesWithContext(currentEnum.ConstBlock, d, currentEnum.Name)
+				values := parseConstValuesWithContext(currentEnum.ConstBlock, d, currentEnum.Type)
 				currentEnum.Values = values
 
 				// Collect all unique tags
@@ -214,19 +215,38 @@ func parseConstValuesWithContext(constBlock string, decl *ast.GenDecl, enumType 
 		}
 		
 		// Check if this line contains an enum definition
+		isEnumDefinition := false
+		var enumName string
+		
 		if strings.Contains(line, "=") && !strings.HasPrefix(trimmed, "//") {
-			// Extract enum name
+			// Explicit value definition
 			parts := strings.Fields(trimmed)
 			if len(parts) >= 1 {
-				enumName := parts[0]
-				if astValue, exists := astMap[enumName]; exists {
-					// Copy AST data and add preceding lines
-					value := astValue
-					value.PrecedingLines = make([]string, len(currentPrecedingLines))
-					copy(value.PrecedingLines, currentPrecedingLines)
-					values = append(values, value)
-					currentPrecedingLines = nil // Reset for next enum
+				enumName = parts[0]
+				isEnumDefinition = true
+			}
+		} else if !strings.HasPrefix(trimmed, "//") && trimmed != "" && 
+				  !strings.Contains(trimmed, "////") && !strings.Contains(trimmed, "//////") {
+			// This might be an enum without explicit value (continuing iota)
+			parts := strings.Fields(trimmed)
+			if len(parts) >= 1 {
+				candidateName := parts[0]
+				// Check if this name exists in our AST map
+				if _, exists := astMap[candidateName]; exists {
+					enumName = candidateName
+					isEnumDefinition = true
 				}
+			}
+		}
+		
+		if isEnumDefinition && enumName != "" {
+			if astValue, exists := astMap[enumName]; exists {
+				// Copy AST data and add preceding lines
+				value := astValue
+				value.PrecedingLines = make([]string, len(currentPrecedingLines))
+				copy(value.PrecedingLines, currentPrecedingLines)
+				values = append(values, value)
+				currentPrecedingLines = nil // Reset for next enum
 			}
 		} else {
 			// This is a comment, separator, or empty line
@@ -239,27 +259,61 @@ func parseConstValuesWithContext(constBlock string, decl *ast.GenDecl, enumType 
 
 func parseConstValues(decl *ast.GenDecl, enumType string) []EnumValue {
 	var values []EnumValue
+	iotaValue := -1
+	var lastValueSpec *ast.ValueSpec
 
 	for _, spec := range decl.Specs {
 		if vs, ok := spec.(*ast.ValueSpec); ok {
+			// If type is not specified, inherit from the previous spec
+			if vs.Type == nil && lastValueSpec != nil {
+				vs.Type = lastValueSpec.Type
+			}
+
+			// Check if this spec belongs to our enum type
+			if typeIdent, ok := vs.Type.(*ast.Ident); !ok || typeIdent.Name != enumType {
+				continue
+			}
+
+			// If values are not specified, inherit from the previous spec
+			if len(vs.Values) == 0 && lastValueSpec != nil {
+				vs.Values = lastValueSpec.Values
+			}
+
+			// Increment iota for each new spec
+			iotaValue++
+
 			for i, name := range vs.Names {
 				value := EnumValue{
 					Name: name.Name,
 				}
 
-				// Parse value
+				// Parse value - handle iota and explicit values
 				if vs.Values != nil && i < len(vs.Values) {
-					if bl, ok := vs.Values[i].(*ast.BasicLit); ok {
+					valExpr := vs.Values[i]
+					if bl, ok := valExpr.(*ast.BasicLit); ok {
 						value.Value = bl.Value
+						if bl.Kind == token.INT {
+							if _, err := strconv.Atoi(bl.Value); err == nil {
+								// This is an explicit integer value, but iota continues based on position
+							}
+						}
+					} else if ident, ok := valExpr.(*ast.Ident); ok && ident.Name == "iota" {
+						value.Value = strconv.Itoa(iotaValue)
+					} else {
+						// This handles cases where the value is an expression,
+						// or where iota is used implicitly.
+						value.Value = strconv.Itoa(iotaValue)
 					}
+				} else {
+					// No explicit value, use iotaValue
+					value.Value = strconv.Itoa(iotaValue)
 				}
 
-				// Parse comment - check both inline and doc comments
+				// Parse comment
 				var commentText string
 				if vs.Comment != nil {
 					commentText = vs.Comment.Text()
 				}
-				// Also check for doc comments on the previous line
 				if vs.Doc != nil {
 					if commentText != "" {
 						commentText = vs.Doc.Text() + "\n" + commentText
@@ -270,12 +324,13 @@ func parseConstValues(decl *ast.GenDecl, enumType string) []EnumValue {
 
 				if commentText != "" {
 					value.Comment = commentText
-					value.OriginalComment = commentText // Save raw comment for display
+					value.OriginalComment = commentText
 					parseValueComment(&value, commentText)
 				}
 
 				values = append(values, value)
 			}
+			lastValueSpec = vs
 		}
 	}
 
@@ -439,7 +494,9 @@ func generateEnumWithTemplate(enum EnumInfo) error {
 	return tmpl.Execute(w, enum)
 }
 
-const enumTemplate = `package {{.PackageName}}
+const enumTemplate = `// Code generated by goenum. DO NOT EDIT.
+
+package {{.PackageName}}
 
 import (
 	"database/sql/driver"
