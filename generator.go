@@ -396,7 +396,7 @@ func generateEnumWithTemplate(enum EnumInfo) error {
 			}
 			return strings.ToUpper(s[:1]) + s[1:]
 		},
-		"FormatPrecedingLines": func(lines []string, enumValues []EnumValue) string {
+		"FormatPrecedingLines": func(lines []string, enumValues []EnumValue, currentValue EnumValue) string {
 			if len(lines) == 0 {
 				return ""
 			}
@@ -408,6 +408,8 @@ func generateEnumWithTemplate(enum EnumInfo) error {
 			}
 			
 			var result []string
+			isFirstCommentLine := true
+			
 			for _, line := range lines {
 				trimmed := strings.TrimSpace(line)
 				if trimmed == "" {
@@ -418,6 +420,14 @@ func generateEnumWithTemplate(enum EnumInfo) error {
 					if strings.Contains(trimmed, "state:") {
 						processedLine = convertStateNames(trimmed, nameMap)
 					}
+					
+					// Add value to the first comment line
+					if isFirstCommentLine && strings.HasPrefix(trimmed, "//") && !strings.Contains(trimmed, "////") {
+						// This is the first actual comment line (not a separator)
+						processedLine = processedLine + " (" + currentValue.Value + ")"
+						isFirstCommentLine = false
+					}
+					
 					result = append(result, "\t"+processedLine)
 				}
 			}
@@ -457,7 +467,7 @@ var _ enums.Enum[{{.BaseType}}, {{.Name}}] = {{.Name}}{}
 type {{.Type}}Container struct {
 	{{- range .Values}}
 	{{- if .PrecedingLines}}
-{{FormatPrecedingLines .PrecedingLines $.Values}}
+{{FormatPrecedingLines .PrecedingLines $.Values .}}
 	{{- end}}
 	{{Title .Name}} {{$.Name}}
 	{{- end}}

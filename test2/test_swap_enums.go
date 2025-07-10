@@ -23,26 +23,26 @@ type swapStatusContainer struct {
 
 	//////////////////////////////////////// STEP1-START ///////////////////////////////////////////
 
-	// pending
+	// pending (1000)
 	// 刚创建swap请求 / 还没有选择counterparty， 或者目标是银行，等待银行的同意
 	Step1Pending SwapStatus
 
 	/////// 售卖给银行内部流程-START
 
-	// canceled
+	// canceled (1030)
 	// 用户自己取消了
 	// state: [final]
 	Step1Canceled SwapStatus
 
-	// step1_bank_mark_amount
+	// step1_bank_mark_amount (1020)
 	// 银行标记了金额，正在等待checker同意; 如果意见不一致，回到pending
 	// state: -> WaitSenderAcceptOrCancel, Step1Pending
 	Step1BankMarkAmount SwapStatus
-	// step1_bank_mark_canceled
+	// step1_bank_mark_canceled (1021)
 	// 银行标记为取消
 	// state: -> Step1CanceledByBank, Step1Pending
 	Step1BankMarkCanceled SwapStatus
-	// canceled_by_bank
+	// canceled_by_bank (1031)
 	// 被银行取消了
 	// state: [final]
 	Step1CanceledByBank SwapStatus
@@ -53,15 +53,17 @@ type swapStatusContainer struct {
 
 	//////////////////////////////////////// STEP2-START ///////////////////////////////////////////
 
-	// wait_counterparty_sign
+	// wait_counterparty_sign (2000)
 	// 等待counterparty签名，等同于[waitSenderAcceptOrCancel]
+	// tag: step2
 	// state: -> WaitSenderBroadcast
 	WaitCounterpartySign SwapStatus
 
 	/////// 售卖给银行内部流程-START
 
-	// wait_sender_accept_cancel
+	// wait_sender_accept_cancel (2000)
 	// 等待发送者接受或者取消; 接受后，系统会自动使用钱包进行签名。
+	// tag: step2
 	// state: -> WaitSenderBroadcast
 	WaitSenderAcceptOrCancel SwapStatus
 
@@ -69,28 +71,33 @@ type swapStatusContainer struct {
 
 	//////////////////////////////////////// STEP2-END ///////////////////////////////////////////
 
-	// wait_sender_broadcast
+	// wait_sender_broadcast (3000)
 	// 等待sender执行swap交易
+	// tag: step3
 	// state: -> WaitTxConfirm
 	WaitSenderBroadcast SwapStatus
 
-	// wait_tx_confirm
+	// wait_tx_confirm (3001)
 	// 等待tx确认
+	// tag: step3
 	// state: -> Success, Expired, Failed
 	WaitTxConfirm SwapStatus
 
-	// success
+	// success (4000)
 	// 成功
+	// tag: step3
 	// state: [final]
 	Success SwapStatus
 
-	// expired
+	// expired (5000)
 	// 过期(超过了swap的deadline)
+	// tag: step3
 	// state: [final]
 	Expired SwapStatus
 
-	// failed
+	// failed (6000)
 	// 失败(sender广播交易失败)
+	// tag: step3
 	// state: [final]
 	Failed SwapStatus
 }
@@ -180,6 +187,30 @@ var swapstatusNamesMap = map[SwapStatus][]string{
 	},
 	Swaps.Failed: {
 		"failed",
+	},
+}
+// swapstatusTagsMap maps enum values to their tags array
+var swapstatusTagsMap = map[SwapStatus][]string{
+	Swaps.WaitCounterpartySign: {
+		"step2",
+	},
+	Swaps.WaitSenderAcceptOrCancel: {
+		"step2",
+	},
+	Swaps.WaitSenderBroadcast: {
+		"step3",
+	},
+	Swaps.WaitTxConfirm: {
+		"step3",
+	},
+	Swaps.Success: {
+		"step3",
+	},
+	Swaps.Expired: {
+		"step3",
+	},
+	Swaps.Failed: {
+		"step3",
 	},
 }
 
@@ -299,6 +330,52 @@ func (t SwapStatus) FromValue(value int) (SwapStatus, bool) {
 	}
 	var zero SwapStatus
 	return zero, false
+}
+
+// Step2Slice returns all enum values that have the "step2" tag.
+func (t swapStatusContainer) Step2Slice() []SwapStatus {
+	var result []SwapStatus
+	for _, v := range t.allSlice() {
+		if v.IsStep2() {
+			result = append(result, v)
+		}
+	}
+	return result
+}
+
+// IsStep2 returns true if this enum value has the "step2" tag.
+func (t SwapStatus) IsStep2() bool {
+	if tags, ok := swapstatusTagsMap[t]; ok {
+		for _, tag := range tags {
+			if tag == "step2" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// Step3Slice returns all enum values that have the "step3" tag.
+func (t swapStatusContainer) Step3Slice() []SwapStatus {
+	var result []SwapStatus
+	for _, v := range t.allSlice() {
+		if v.IsStep3() {
+			result = append(result, v)
+		}
+	}
+	return result
+}
+
+// IsStep3 returns true if this enum value has the "step3" tag.
+func (t SwapStatus) IsStep3() bool {
+	if tags, ok := swapstatusTagsMap[t]; ok {
+		for _, tag := range tags {
+			if tag == "step3" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // All container methods for convenience
