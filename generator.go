@@ -22,13 +22,15 @@ type EnumInfo struct {
 	BaseType      string
 	ContainerName string
 	AllTags       []string // All unique tags across all values
+	ConstBlock    string   // Raw text of the entire const block
 }
 
 type EnumValue struct {
 	Name            string
 	Value           string
 	Comment         string
-	OriginalComment string // Raw comment text for display in generated code
+	OriginalComment string   // Raw comment text for display in generated code
+	PrecedingLines  []string // All lines (comments, separators, empty lines) before this enum
 	Names           []string
 	IsInvalid       bool
 	Tags            []string
@@ -70,6 +72,12 @@ func main() {
 }
 
 func parseFile(filename string) ([]EnumInfo, error) {
+	// Read the raw file content first
+	fileContent, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+	
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
 	if err != nil {
@@ -98,7 +106,12 @@ func parseFile(filename string) ([]EnumInfo, error) {
 					}
 				}
 			} else if d.Tok == token.CONST && currentEnum != nil {
-				values := parseConstValues(d, currentEnum.Name)
+				// Extract raw const block text
+				start := fset.Position(d.Pos()).Offset
+				end := fset.Position(d.End()).Offset
+				currentEnum.ConstBlock = string(fileContent[start:end])
+				
+				values := parseConstValuesWithContext(currentEnum.ConstBlock, d, currentEnum.Name)
 				currentEnum.Values = values
 
 				// Collect all unique tags
@@ -175,6 +188,53 @@ func parseOptions(comment string) EnumOptions {
 	}
 
 	return options
+}
+
+func parseConstValuesWithContext(constBlock string, decl *ast.GenDecl, enumType string) []EnumValue {
+	// First parse using AST to get the structured data
+	astValues := parseConstValues(decl, enumType)
+	
+	// Then parse the raw text to associate comments
+	lines := strings.Split(constBlock, "\n")
+	var values []EnumValue
+	var currentPrecedingLines []string
+	
+	// Create a map of enum names from AST parsing
+	astMap := make(map[string]EnumValue)
+	for _, v := range astValues {
+		astMap[v.Name] = v
+	}
+	
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		
+		// Skip const ( and )
+		if trimmed == "const (" || trimmed == ")" {
+			continue
+		}
+		
+		// Check if this line contains an enum definition
+		if strings.Contains(line, "=") && !strings.HasPrefix(trimmed, "//") {
+			// Extract enum name
+			parts := strings.Fields(trimmed)
+			if len(parts) >= 1 {
+				enumName := parts[0]
+				if astValue, exists := astMap[enumName]; exists {
+					// Copy AST data and add preceding lines
+					value := astValue
+					value.PrecedingLines = make([]string, len(currentPrecedingLines))
+					copy(value.PrecedingLines, currentPrecedingLines)
+					values = append(values, value)
+					currentPrecedingLines = nil // Reset for next enum
+				}
+			}
+		} else {
+			// This is a comment, separator, or empty line
+			currentPrecedingLines = append(currentPrecedingLines, line)
+		}
+	}
+	
+	return values
 }
 
 func parseConstValues(decl *ast.GenDecl, enumType string) []EnumValue {
@@ -283,6 +343,34 @@ func parseValueComment(value *EnumValue, comment string) {
 	}
 }
 
+func convertStateNames(line string, nameMap map[string]string) string {
+	// Handle state: -> target1, target2 format
+	if strings.Contains(line, "state: ->") {
+		parts := strings.Split(line, "->")
+		if len(parts) == 2 {
+			prefix := parts[0] // "// state: "
+			targets := strings.TrimSpace(parts[1])
+			
+			// Split targets by comma
+			targetList := strings.Split(targets, ",")
+			var convertedTargets []string
+			
+			for _, target := range targetList {
+				target = strings.TrimSpace(target)
+				if convertedName, exists := nameMap[target]; exists {
+					convertedTargets = append(convertedTargets, convertedName)
+				} else {
+					convertedTargets = append(convertedTargets, target)
+				}
+			}
+			
+			return prefix + "-> " + strings.Join(convertedTargets, ", ")
+		}
+	}
+	
+	return line
+}
+
 func generateEnumWithTemplate(enum EnumInfo) error {
 	outputFile := strings.TrimSuffix(enum.FileName, ".go") + "_enums.go"
 
@@ -308,33 +396,33 @@ func generateEnumWithTemplate(enum EnumInfo) error {
 			}
 			return strings.ToUpper(s[:1]) + s[1:]
 		},
-		"FormatComment": func(comment string, value string) string {
-			if comment == "" {
+		"FormatPrecedingLines": func(lines []string, enumValues []EnumValue) string {
+			if len(lines) == 0 {
 				return ""
 			}
-			lines := strings.Split(comment, "\n")
-			var formattedLines []string
-			for i, line := range lines {
-				line = strings.TrimSpace(line)
-				if line == "" {
-					continue
-				}
-				// Remove // prefix if exists and add it back consistently
-				line = strings.TrimPrefix(line, "//")
-				line = strings.TrimSpace(line)
-				if line != "" {
-					if i == 0 {
-						// Add value to the first line
-						formattedLines = append(formattedLines, "// "+line+" ("+value+")")
-					} else {
-						formattedLines = append(formattedLines, "// "+line)
+			
+			// Create a map of original enum names to title case names
+			nameMap := make(map[string]string)
+			for _, v := range enumValues {
+				nameMap[v.Name] = strings.Title(v.Name)
+			}
+			
+			var result []string
+			for _, line := range lines {
+				trimmed := strings.TrimSpace(line)
+				if trimmed == "" {
+					result = append(result, "")
+				} else {
+					// Process state transitions to convert names
+					processedLine := trimmed
+					if strings.Contains(trimmed, "state:") {
+						processedLine = convertStateNames(trimmed, nameMap)
 					}
+					result = append(result, "\t"+processedLine)
 				}
 			}
-			if len(formattedLines) > 0 {
-				return strings.Join(formattedLines, "\n\t")
-			}
-			return ""
+			
+			return strings.Join(result, "\n")
 		},
 	}).Parse(enumTemplate))
 
@@ -368,10 +456,8 @@ var _ enums.Enum[{{.BaseType}}, {{.Name}}] = {{.Name}}{}
 // It is private and should not be used directly use the public methods on the {{.Name}} type.
 type {{.Type}}Container struct {
 	{{- range .Values}}
-	{{- if .OriginalComment}}
-	{{FormatComment .OriginalComment .Value}}
-	{{- else}}
-	// ({{.Value}})
+	{{- if .PrecedingLines}}
+{{FormatPrecedingLines .PrecedingLines $.Values}}
 	{{- end}}
 	{{Title .Name}} {{$.Name}}
 	{{- end}}
