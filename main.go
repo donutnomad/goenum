@@ -50,6 +50,14 @@ type EnumOptions struct {
 	StateMachine bool
 }
 
+// FileTemplateData is the data structure passed to the template for generating the output file.
+type FileTemplateData struct {
+	PackageName string
+	Enums       []EnumInfo
+	HasSQL      bool
+	HasYAML     bool
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		println("Usage: goenum <file.go>")
@@ -63,17 +71,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	for _, enum := range enums {
-		err := generateEnumWithTemplate(enum)
+	if len(enums) > 0 {
+		err := generateEnumsFile(enums, filename)
 		if err != nil {
-			println("Error generating enum", enum.Name+":", err.Error())
+			println("Error generating enums file:", err.Error())
 			os.Exit(1)
 		}
 	}
 }
 
 func parseFile(filename string) ([]EnumInfo, error) {
-	// Read the raw file content first
 	fileContent, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
@@ -86,55 +93,80 @@ func parseFile(filename string) ([]EnumInfo, error) {
 	}
 
 	var enums []EnumInfo
-	var currentEnum *EnumInfo
+	enumsMap := make(map[string]*EnumInfo) // Map from type name to EnumInfo
 
+	// First pass: find all goenums type declarations
 	for _, decl := range node.Decls {
-		switch d := decl.(type) {
-		case *ast.GenDecl:
-			if d.Tok == token.TYPE {
-				for _, spec := range d.Specs {
-					if ts, ok := spec.(*ast.TypeSpec); ok {
-						if d.Doc != nil {
-							for _, comment := range d.Doc.List {
-								if strings.Contains(comment.Text, "goenums:") {
-									enum := parseEnumFromTypeSpec(ts, comment.Text, node.Name.Name, filename)
-									enums = append(enums, enum)
-									currentEnum = &enums[len(enums)-1]
-									break
-								}
-							}
-						}
+		genDecl, ok := decl.(*ast.GenDecl)
+		if !ok || genDecl.Tok != token.TYPE {
+			continue
+		}
+		for _, spec := range genDecl.Specs {
+			typeSpec, ok := spec.(*ast.TypeSpec)
+			if !ok {
+				continue
+			}
+			if genDecl.Doc != nil {
+				for _, comment := range genDecl.Doc.List {
+					if strings.Contains(comment.Text, "goenums:") {
+						enum := parseEnumFromTypeSpec(typeSpec, comment.Text, node.Name.Name, filename)
+						enums = append(enums, enum)
+						enumsMap[enum.Type] = &enums[len(enums)-1]
+						break
 					}
-				}
-			} else if d.Tok == token.CONST && currentEnum != nil {
-				// Extract raw const block text
-				start := fset.Position(d.Pos()).Offset
-				end := fset.Position(d.End()).Offset
-				currentEnum.ConstBlock = string(fileContent[start:end])
-
-				values := parseConstValuesWithContext(currentEnum.ConstBlock, d, currentEnum.Type)
-				currentEnum.Values = values
-
-				// Collect all unique tags
-				tagSet := make(map[string]bool)
-				for _, value := range values {
-					for _, tag := range value.Tags {
-						tagSet[tag] = true
-					}
-				}
-				for tag := range tagSet {
-					currentEnum.AllTags = append(currentEnum.AllTags, tag)
 				}
 			}
+		}
+	}
+
+	// Second pass: find const declarations and associate values
+	for _, decl := range node.Decls {
+		genDecl, ok := decl.(*ast.GenDecl)
+		if !ok || genDecl.Tok != token.CONST {
+			continue
+		}
+
+		constBlockText := string(fileContent[fset.Position(genDecl.Pos()).Offset:fset.Position(genDecl.End()).Offset])
+
+		for enumType, enumInfo := range enumsMap {
+			values := parseConstValuesWithContext(constBlockText, genDecl, enumType)
+			if len(values) > 0 {
+				enumInfo.Values = append(enumInfo.Values, values...)
+				if enumInfo.ConstBlock == "" {
+					enumInfo.ConstBlock = constBlockText
+				}
+			}
+		}
+	}
+
+	// Third pass: post-process (e.g., collect tags)
+	for i := range enums {
+		enum := &enums[i]
+		tagSet := make(map[string]bool)
+		for _, value := range enum.Values {
+			for _, tag := range value.Tags {
+				tagSet[tag] = true
+			}
+		}
+		enum.AllTags = nil
+		for tag := range tagSet {
+			enum.AllTags = append(enum.AllTags, tag)
 		}
 	}
 
 	return enums, nil
 }
 
+func FirstUpper(s string) string {
+	if len(s) == 0 {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
+}
+
 func parseEnumFromTypeSpec(ts *ast.TypeSpec, comment string, packageName string, filename string) EnumInfo {
 	enum := EnumInfo{
-		Name:        strings.Title(ts.Name.Name),
+		Name:        FirstUpper(ts.Name.Name),
 		Type:        ts.Name.Name,
 		PackageName: packageName,
 		FileName:    filename,
@@ -147,7 +179,7 @@ func parseEnumFromTypeSpec(ts *ast.TypeSpec, comment string, packageName string,
 	}
 
 	// Generate container name using pluralization
-	enum.ContainerName = GetContainerName(enum.Name)
+	enum.ContainerName = FirstUpper(GetContainerName(enum.Name))
 
 	return enum
 }
@@ -426,8 +458,8 @@ func convertStateNames(line string, nameMap map[string]string) string {
 	return line
 }
 
-func generateEnumWithTemplate(enum EnumInfo) error {
-	outputFile := strings.TrimSuffix(enum.FileName, ".go") + "_enums.go"
+func generateEnumsFile(enums []EnumInfo, sourceFilename string) error {
+	outputFile := strings.TrimSuffix(sourceFilename, ".go") + "_enums.go"
 
 	file, err := os.Create(outputFile)
 	if err != nil {
@@ -438,28 +470,38 @@ func generateEnumWithTemplate(enum EnumInfo) error {
 	w := bufio.NewWriter(file)
 	defer w.Flush()
 
+	// Determine required imports
+	hasSQL := false
+	hasYAML := false
+	for _, e := range enums {
+		if e.Options.SQL {
+			hasSQL = true
+		}
+		if e.Options.YAML {
+			hasYAML = true
+		}
+	}
+
+	data := FileTemplateData{
+		PackageName: enums[0].PackageName,
+		Enums:       enums,
+		HasSQL:      hasSQL,
+		HasYAML:     hasYAML,
+	}
+
 	// Execute template
-	tmpl := template.Must(template.New("enum").Funcs(template.FuncMap{
-		"Title":     strings.Title,
-		"ToLower":   strings.ToLower,
-		"ToUpper":   strings.ToUpper,
-		"HasPrefix": strings.HasPrefix,
-		"Join":      strings.Join,
-		"FirstUpper": func(s string) string {
-			if len(s) == 0 {
-				return s
-			}
-			return strings.ToUpper(s[:1]) + s[1:]
-		},
+	tmpl := template.Must(template.New("enumsFile").Funcs(template.FuncMap{
+		"FirstUpper": FirstUpper,
+		"ToLower":    strings.ToLower,
 		"FormatPrecedingLines": func(lines []string, enumValues []EnumValue, currentValue EnumValue) string {
 			if len(lines) == 0 {
 				return ""
 			}
 
-			// Create a map of original enum names to title case names
+			// Create a map of original enum names to handle state name conversions
 			nameMap := make(map[string]string)
 			for _, v := range enumValues {
-				nameMap[v.Name] = strings.Title(v.Name)
+				nameMap[v.Name] = v.Name
 			}
 
 			var result []string
@@ -470,15 +512,12 @@ func generateEnumWithTemplate(enum EnumInfo) error {
 				if trimmed == "" {
 					result = append(result, "")
 				} else {
-					// Process state transitions to convert names
 					processedLine := trimmed
 					if strings.Contains(trimmed, "state:") {
-						processedLine = convertStateNames(trimmed, nameMap)
+						// No longer need to convert state names here, it's handled in the template
 					}
 
-					// Add value to the first comment line
 					if isFirstCommentLine && strings.HasPrefix(trimmed, "//") && !strings.Contains(trimmed, "////") {
-						// This is the first actual comment line (not a separator)
 						processedLine = processedLine + " (" + currentValue.Value + ")"
 						isFirstCommentLine = false
 					}
@@ -489,12 +528,12 @@ func generateEnumWithTemplate(enum EnumInfo) error {
 
 			return strings.Join(result, "\n")
 		},
-	}).Parse(enumTemplate))
+	}).Parse(fileTemplate))
 
-	return tmpl.Execute(w, enum)
+	return tmpl.Execute(w, data)
 }
 
-const enumTemplate = `// Code generated by goenum. DO NOT EDIT.
+const fileTemplate = `// Code generated by goenum. DO NOT EDIT.
 
 package {{.PackageName}}
 
@@ -503,12 +542,14 @@ import (
 	"fmt"
 	"github.com/donutnomad/goenum/enums"
 	"iter"
-	{{- if .Options.SQL}}
-	{{- end}}
-	{{- if .Options.YAML}}
+	{{- if .HasYAML}}
 	"gopkg.in/yaml.v3"
 	{{- end}}
 )
+{{range $enum := .Enums}}
+// =================================================================================================
+// {{.Name}}
+// =================================================================================================
 
 // {{.Name}} is a type that represents a single enum value.
 // It combines the core information about the enum constant and its defined fields.
@@ -524,25 +565,25 @@ var _ enums.Enum[{{.BaseType}}, {{.Name}}] = {{.Name}}{}
 type {{.Type}}Container struct {
 	{{- range .Values}}
 	{{- if .PrecedingLines}}
-{{FormatPrecedingLines .PrecedingLines $.Values .}}
+{{FormatPrecedingLines .PrecedingLines $enum.Values .}}
 	{{- end}}
-	{{Title .Name}} {{$.Name}}
+	{{FirstUpper .Name}} {{$enum.Name}}
 	{{- end}}
 }
 
-// {{Title .ContainerName}} is a main entry point using the {{.Name}} type.
+// {{.ContainerName}} is a main entry point using the {{.Name}} type.
 // It is a container for all enum values and provides a convenient way to access all enum values and perform
 // operations, with convenience methods for common use cases.
-var {{Title .ContainerName}} = {{.Type}}Container{
+var {{.ContainerName}} = {{.Type}}Container{
 	{{- range .Values}}
-	{{Title .Name}}: {{$.Name}}{ {{.Name}} },
+	{{FirstUpper .Name}}: {{$enum.Name}}{ {{.Name}} },
 	{{- end}}
 }
 
 // {{ToLower .Name}}NamesMap maps enum values to their names array
 var {{ToLower .Name}}NamesMap = map[{{.Name}}][]string{
 	{{- range .Values}}
-	{{Title $.ContainerName}}.{{Title .Name}}: {
+	{{$enum.ContainerName}}.{{FirstUpper .Name}}: {
 		{{- range .Names}}
 		"{{.}}",
 		{{- end}}
@@ -555,7 +596,7 @@ var {{ToLower .Name}}NamesMap = map[{{.Name}}][]string{
 var {{ToLower .Name}}TagsMap = map[{{.Name}}][]string{
 	{{- range .Values}}
 	{{- if .Tags}}
-	{{Title $.ContainerName}}.{{Title .Name}}: {
+	{{$enum.ContainerName}}.{{FirstUpper .Name}}: {
 		{{- range .Tags}}
 		"{{.}}",
 		{{- end}}
@@ -565,16 +606,16 @@ var {{ToLower .Name}}TagsMap = map[{{.Name}}][]string{
 }
 {{- end}}
 
-// {{Title .ContainerName}}Raw is a type alias for the underlying enum type {{.Type}}.
+// {{.Name}}Raw is a type alias for the underlying enum type {{.Type}}.
 // It provides direct access to the raw enum values for cases where you need
 // to work with the underlying type directly.
-type {{Title .ContainerName}}Raw = {{.Type}}
+type {{.Name}}Raw = {{.Type}}
 
 // allSlice returns a slice of all enum values.
 func (t {{.Type}}Container) allSlice() []{{.Name}} {
 	return []{{.Name}}{
 		{{- range .Values}}
-		{{Title $.ContainerName}}.{{Title .Name}},
+		{{$enum.ContainerName}}.{{FirstUpper .Name}},
 		{{- end}}
 	}
 }
@@ -587,7 +628,7 @@ func (t {{.Name}}) Val() {{.BaseType}} {
 // All implements the Enum interface.
 func (t {{.Name}}) All() iter.Seq[{{.Name}}] {
 	return func(yield func({{.Name}}) bool) {
-		for _, v := range {{Title .ContainerName}}.allSlice() {
+		for _, v := range {{.ContainerName}}.allSlice() {
 			if !v.IsValid() {
 				continue
 			}
@@ -602,7 +643,7 @@ func (t {{.Name}}) All() iter.Seq[{{.Name}}] {
 func (t {{.Name}}) IsValid() bool {
 	{{- range .Values}}
 	{{- if .IsInvalid}}
-	if t == {{Title $.ContainerName}}.{{Title .Name}} {
+	if t == {{$enum.ContainerName}}.{{FirstUpper .Name}} {
 		return false
 	}
 	{{- end}}
@@ -672,7 +713,7 @@ func (t {{.Name}}) FromName(name string) ({{.Name}}, bool) {
 
 // FromValue implements the Enum interface.
 func (t {{.Name}}) FromValue(value {{.BaseType}}) ({{.Name}}, bool) {
-	for v := range {{Title .ContainerName}}.All() {
+	for v := range {{.ContainerName}}.All() {
 		if v.Val() == value {
 			return v, true
 		}
@@ -685,8 +726,8 @@ func (t {{.Name}}) FromValue(value {{.BaseType}}) ({{.Name}}, bool) {
 {{- range .AllTags}}
 
 // {{FirstUpper .}}Slice returns all enum values that have the "{{.}}" tag.
-func (t {{$.Type}}Container) {{FirstUpper .}}Slice() []{{$.Name}} {
-	var result []{{$.Name}}
+func (t {{$enum.Type}}Container) {{FirstUpper .}}Slice() []{{$enum.Name}} {
+	var result []{{$enum.Name}}
 	for _, v := range t.allSlice() {
 		if v.Is{{FirstUpper .}}() {
 			result = append(result, v)
@@ -696,8 +737,8 @@ func (t {{$.Type}}Container) {{FirstUpper .}}Slice() []{{$.Name}} {
 }
 
 // Is{{FirstUpper .}} returns true if this enum value has the "{{.}}" tag.
-func (t {{$.Name}}) Is{{FirstUpper .}}() bool {
-	if tags, ok := {{ToLower $.Name}}TagsMap[t]; ok {
+func (t {{$enum.Name}}) Is{{FirstUpper .}}() bool {
+	if tags, ok := {{ToLower $enum.Name}}TagsMap[t]; ok {
 		for _, tag := range tags {
 			if tag == "{{.}}" {
 				return true
@@ -829,10 +870,10 @@ func (t {{.Name}}) CanTransitionTo(target {{.Name}}) bool {
 func (t {{.Name}}) ValidTransitions() []{{.Name}} {
 	{{- range .Values}}
 	{{- if .Transitions}}
-	if t == {{Title $.ContainerName}}.{{Title .Name}} {
-		return []{{$.Name}}{
+	if t == {{$enum.ContainerName}}.{{FirstUpper .Name}} {
+		return []{{$enum.Name}}{
 			{{- range .Transitions}}
-			{{Title $.ContainerName}}.{{Title .}},
+			{{$enum.ContainerName}}.{{FirstUpper .}},
 			{{- end}}
 		}
 	}
@@ -845,7 +886,7 @@ func (t {{.Name}}) ValidTransitions() []{{.Name}} {
 func (t {{.Name}}) IsTerminalState() bool {
 	{{- range .Values}}
 	{{- if .IsFinal}}
-	if t == {{Title $.ContainerName}}.{{Title .Name}} {
+	if t == {{$enum.ContainerName}}.{{FirstUpper .Name}} {
 		return true
 	}
 	{{- end}}
@@ -858,10 +899,11 @@ func (t {{.Name}}) TerminalStateSlice() []{{.Name}} {
 	return []{{.Name}}{
 		{{- range .Values}}
 		{{- if .IsFinal}}
-		{{Title $.ContainerName}}.{{Title .Name}},
+		{{$enum.ContainerName}}.{{FirstUpper .Name}},
 		{{- end}}
 		{{- end}}
 	}
 }
 {{- end}}
+{{end}}
 `

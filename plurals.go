@@ -88,24 +88,42 @@ func isVowel(c byte) bool {
 
 // GetContainerName generates the container name for an enum type
 func GetContainerName(typeName string) string {
-	// Remove common enum suffixes and get the base name
-	name := typeName
-	suffixes := []string{"Status", "Type", "Kind", "State", "Mode", "Level", "Priority", "Category"}
-
-	for _, suffix := range suffixes {
-		if strings.HasSuffix(name, suffix) {
-			baseLen := len(name) - len(suffix)
-			if baseLen > 0 {
-				name = name[:baseLen]
-				break
-			}
+	// Directly pluralize the full type name instead of removing suffixes
+	// But first preserve the original case pattern
+	if typeName == "" {
+		return ""
+	}
+	
+	// For compound words like "SwapStatus", we need to handle the pluralization correctly
+	// We need to find the last word and pluralize it while preserving the case
+	
+	// First, try to find the last "word" in a camelCase/PascalCase string
+	lastWordStart := 0
+	for i := len(typeName) - 1; i > 0; i-- {
+		if typeName[i] >= 'A' && typeName[i] <= 'Z' {
+			lastWordStart = i
+			break
 		}
 	}
-
-	// If no suffix was removed or name is empty, use the original name
-	if name == "" || name == typeName {
-		name = typeName
+	
+	if lastWordStart > 0 {
+		// We found a compound word like "SwapStatus" 
+		prefix := typeName[:lastWordStart]
+		lastWord := typeName[lastWordStart:]
+		pluralLastWord := PluralizeEnglish(strings.ToLower(lastWord))
+		// Capitalize the first letter of the pluralized last word
+		pluralLastWord = strings.ToUpper(pluralLastWord[:1]) + pluralLastWord[1:]
+		return prefix + pluralLastWord
 	}
-
-	return PluralizeEnglish(name)
+	
+	// For simple words, just pluralize and preserve case
+	plural := PluralizeEnglish(strings.ToLower(typeName))
+	
+	// Preserve original case pattern
+	if len(typeName) > 0 && typeName[0] >= 'A' && typeName[0] <= 'Z' {
+		// PascalCase - make first letter uppercase
+		plural = strings.ToUpper(plural[:1]) + plural[1:]
+	}
+	
+	return plural
 }

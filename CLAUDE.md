@@ -10,7 +10,7 @@ This is `goenum`, a Go enum type struct generator that transforms user-defined e
 
 ### Main Components
 
-- **Generator (`generator.go`)**: Main code generation engine that parses Go source files and generates enum structs
+- **Generator (`main.go`)**: Main code generation engine that parses Go source files and generates enum structs
 - **Pluralization (`plurals.go`)**: English pluralization logic for generating container names
 - **Enums Package (`enums/`)**: Core enum interface definitions and serialization utilities
 - **Template System**: Embedded Go template for generating enum code
@@ -25,11 +25,13 @@ This is `goenum`, a Go enum type struct generator that transforms user-defined e
 
 ### Build and Run
 ```bash
-make build          # Build the goenum binary
+make build          # Build the goenum binary (REQUIRED before first use)
 make install        # Install to $GOPATH/bin
 make generate       # Run generator on test files
 ./goenum <file.go>  # Generate enums for a specific file
 ```
+
+**重要提醒**: 在首次使用或修改代码后，必须先运行 `make build` 来构建最新的goenum二进制文件，然后才能使用 `./goenum` 命令生成枚举代码。
 
 ### Testing and Quality
 ```bash
