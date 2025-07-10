@@ -416,7 +416,7 @@ func (t {{.Name}}) All() iter.Seq[{{.Name}}] {
 func (t {{.Name}}) IsValid() bool {
 	{{- range .Values}}
 	{{- if .IsInvalid}}
-	if t.{{$.Type}} == {{Title $.ContainerName}}.{{Title .Name}}.{{$.Type}} {
+	if t == {{Title $.ContainerName}}.{{Title .Name}} {
 		return false
 	}
 	{{- end}}
@@ -632,7 +632,7 @@ func (t *{{.Name}}) UnmarshalBinary(data []byte) error {
 func (t {{.Name}}) CanTransitionTo(target {{.Name}}) bool {
 	transitions := t.ValidTransitions()
 	for _, validTarget := range transitions {
-		if validTarget.{{.Type}} == target.{{.Type}} {
+		if validTarget == target {
 			return true
 		}
 	}
@@ -643,7 +643,7 @@ func (t {{.Name}}) CanTransitionTo(target {{.Name}}) bool {
 func (t {{.Name}}) ValidTransitions() []{{.Name}} {
 	{{- range .Values}}
 	{{- if .Transitions}}
-	if t.{{$.Type}} == {{Title $.ContainerName}}.{{Title .Name}}.{{$.Type}} {
+	if t == {{Title $.ContainerName}}.{{Title .Name}} {
 		return []{{$.Name}}{
 			{{- range .Transitions}}
 			{{Title $.ContainerName}}.{{Title .}},
@@ -659,7 +659,7 @@ func (t {{.Name}}) ValidTransitions() []{{.Name}} {
 func (t {{.Name}}) IsTerminalState() bool {
 	{{- range .Values}}
 	{{- if .IsFinal}}
-	if t.{{$.Type}} == {{.Value}} {
+	if t == {{Title $.ContainerName}}.{{Title .Name}} {
 		return true
 	}
 	{{- end}}

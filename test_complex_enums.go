@@ -2,8 +2,8 @@ package main
 
 import (
 	"database/sql/driver"
+	"fmt"
 	"github.com/donutnomad/goenum/enums"
-	main2 "github.com/donutnomad/goenum/test2"
 	"iter"
 )
 
@@ -19,20 +19,20 @@ var _ enums.Enum[int, TokenRequestStatus] = TokenRequestStatus{}
 // tokenRequestStatusContainer is the container for all enum values.
 // It is private and should not be used directly use the public methods on the TokenRequestStatus type.
 type tokenRequestStatusContainer struct {
-	Invalid               TokenRequestStatus
-	Step1Initialized      TokenRequestStatus
-	Step1MarkAllowed      TokenRequestStatus
-	Step1MarkDenied       TokenRequestStatus
-	Step1Denied           TokenRequestStatus
-	Step1Failed           TokenRequestStatus
-	Step1Canceled         TokenRequestStatus
-	Step2WaitingPayment   TokenRequestStatus
+	Invalid TokenRequestStatus
+	Step1Initialized TokenRequestStatus
+	Step1MarkAllowed TokenRequestStatus
+	Step1MarkDenied TokenRequestStatus
+	Step1Denied TokenRequestStatus
+	Step1Failed TokenRequestStatus
+	Step1Canceled TokenRequestStatus
+	Step2WaitingPayment TokenRequestStatus
 	Step2WaitingTxConfirm TokenRequestStatus
-	Step2Failed           TokenRequestStatus
-	Step3Initialized      TokenRequestStatus
-	Step3MarkAllowed      TokenRequestStatus
-	Step3Failed           TokenRequestStatus
-	Step4Success          TokenRequestStatus
+	Step2Failed TokenRequestStatus
+	Step3Initialized TokenRequestStatus
+	Step3MarkAllowed TokenRequestStatus
+	Step3Failed TokenRequestStatus
+	Step4Success TokenRequestStatus
 }
 
 // Tokenrequests is a main entry point using the TokenRequestStatus type.
@@ -58,7 +58,7 @@ var Tokenrequests = tokenRequestStatusContainer{
 		tokenRequestStatus: step1Failed,
 	},
 	Step1Canceled: TokenRequestStatus{
-		tokenRequestStatus: main2.step1Canceled,
+		tokenRequestStatus: step1Canceled,
 	},
 	Step2WaitingPayment: TokenRequestStatus{
 		tokenRequestStatus: step2WaitingPayment,
@@ -143,7 +143,6 @@ var tokenrequeststatusNamesMap = map[TokenRequestStatus][]string{
 		"done",
 	},
 }
-
 // tokenrequeststatusTagsMap maps enum values to their tags array
 var tokenrequeststatusTagsMap = map[TokenRequestStatus][]string{
 	Tokenrequests.Step1MarkAllowed: {
@@ -224,7 +223,7 @@ func (t TokenRequestStatus) All() iter.Seq[TokenRequestStatus] {
 
 // IsValid implements the Enum interface.
 func (t TokenRequestStatus) IsValid() bool {
-	if t.tokenRequestStatus == Tokenrequests.Invalid.tokenRequestStatus {
+	if t == Tokenrequests.Invalid {
 		return false
 	}
 	return true
@@ -262,7 +261,10 @@ func (t TokenRequestStatus) Names() []string {
 
 // String implements the Stringer interface.
 func (t TokenRequestStatus) String() string {
-	return t.Name()
+	if names, ok := tokenrequeststatusNamesMap[t]; ok && len(names) > 0 {
+		return names[0]
+	}
+	return fmt.Sprintf("tokenRequestStatus(%v)", t.tokenRequestStatus)
 }
 
 // SerdeFormat implements the Enum interface.
@@ -275,7 +277,7 @@ func (t TokenRequestStatus) FromName(name string) (TokenRequestStatus, bool) {
 	for enumValue, names := range tokenrequeststatusNamesMap {
 		for _, n := range names {
 			if n == name {
-				return enumValue, true
+				return enumValue, enumValue.IsValid()
 			}
 		}
 	}
@@ -285,7 +287,7 @@ func (t TokenRequestStatus) FromName(name string) (TokenRequestStatus, bool) {
 
 // FromValue implements the Enum interface.
 func (t TokenRequestStatus) FromValue(value int) (TokenRequestStatus, bool) {
-	for _, v := range Tokenrequests.allSlice() {
+	for v := range Tokenrequests.All() {
 		if v.Val() == value {
 			return v, true
 		}
