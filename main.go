@@ -78,7 +78,7 @@ func parseFile(filename string) ([]EnumInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
 	if err != nil {
@@ -111,7 +111,7 @@ func parseFile(filename string) ([]EnumInfo, error) {
 				start := fset.Position(d.Pos()).Offset
 				end := fset.Position(d.End()).Offset
 				currentEnum.ConstBlock = string(fileContent[start:end])
-				
+
 				values := parseConstValuesWithContext(currentEnum.ConstBlock, d, currentEnum.Type)
 				currentEnum.Values = values
 
@@ -194,30 +194,30 @@ func parseOptions(comment string) EnumOptions {
 func parseConstValuesWithContext(constBlock string, decl *ast.GenDecl, enumType string) []EnumValue {
 	// First parse using AST to get the structured data
 	astValues := parseConstValues(decl, enumType)
-	
+
 	// Then parse the raw text to associate comments
 	lines := strings.Split(constBlock, "\n")
 	var values []EnumValue
 	var currentPrecedingLines []string
-	
+
 	// Create a map of enum names from AST parsing
 	astMap := make(map[string]EnumValue)
 	for _, v := range astValues {
 		astMap[v.Name] = v
 	}
-	
+
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		
+
 		// Skip const ( and )
 		if trimmed == "const (" || trimmed == ")" {
 			continue
 		}
-		
+
 		// Check if this line contains an enum definition
 		isEnumDefinition := false
 		var enumName string
-		
+
 		if strings.Contains(line, "=") && !strings.HasPrefix(trimmed, "//") {
 			// Explicit value definition
 			parts := strings.Fields(trimmed)
@@ -225,8 +225,8 @@ func parseConstValuesWithContext(constBlock string, decl *ast.GenDecl, enumType 
 				enumName = parts[0]
 				isEnumDefinition = true
 			}
-		} else if !strings.HasPrefix(trimmed, "//") && trimmed != "" && 
-				  !strings.Contains(trimmed, "////") && !strings.Contains(trimmed, "//////") {
+		} else if !strings.HasPrefix(trimmed, "//") && trimmed != "" &&
+			!strings.Contains(trimmed, "////") && !strings.Contains(trimmed, "//////") {
 			// This might be an enum without explicit value (continuing iota)
 			parts := strings.Fields(trimmed)
 			if len(parts) >= 1 {
@@ -238,7 +238,7 @@ func parseConstValuesWithContext(constBlock string, decl *ast.GenDecl, enumType 
 				}
 			}
 		}
-		
+
 		if isEnumDefinition && enumName != "" {
 			if astValue, exists := astMap[enumName]; exists {
 				// Copy AST data and add preceding lines
@@ -253,7 +253,7 @@ func parseConstValuesWithContext(constBlock string, decl *ast.GenDecl, enumType 
 			currentPrecedingLines = append(currentPrecedingLines, line)
 		}
 	}
-	
+
 	return values
 }
 
@@ -405,11 +405,11 @@ func convertStateNames(line string, nameMap map[string]string) string {
 		if len(parts) == 2 {
 			prefix := parts[0] // "// state: "
 			targets := strings.TrimSpace(parts[1])
-			
+
 			// Split targets by comma
 			targetList := strings.Split(targets, ",")
 			var convertedTargets []string
-			
+
 			for _, target := range targetList {
 				target = strings.TrimSpace(target)
 				if convertedName, exists := nameMap[target]; exists {
@@ -418,11 +418,11 @@ func convertStateNames(line string, nameMap map[string]string) string {
 					convertedTargets = append(convertedTargets, target)
 				}
 			}
-			
+
 			return prefix + "-> " + strings.Join(convertedTargets, ", ")
 		}
 	}
-	
+
 	return line
 }
 
@@ -455,16 +455,16 @@ func generateEnumWithTemplate(enum EnumInfo) error {
 			if len(lines) == 0 {
 				return ""
 			}
-			
+
 			// Create a map of original enum names to title case names
 			nameMap := make(map[string]string)
 			for _, v := range enumValues {
 				nameMap[v.Name] = strings.Title(v.Name)
 			}
-			
+
 			var result []string
 			isFirstCommentLine := true
-			
+
 			for _, line := range lines {
 				trimmed := strings.TrimSpace(line)
 				if trimmed == "" {
@@ -475,18 +475,18 @@ func generateEnumWithTemplate(enum EnumInfo) error {
 					if strings.Contains(trimmed, "state:") {
 						processedLine = convertStateNames(trimmed, nameMap)
 					}
-					
+
 					// Add value to the first comment line
 					if isFirstCommentLine && strings.HasPrefix(trimmed, "//") && !strings.Contains(trimmed, "////") {
 						// This is the first actual comment line (not a separator)
 						processedLine = processedLine + " (" + currentValue.Value + ")"
 						isFirstCommentLine = false
 					}
-					
+
 					result = append(result, "\t"+processedLine)
 				}
 			}
-			
+
 			return strings.Join(result, "\n")
 		},
 	}).Parse(enumTemplate))
@@ -535,9 +535,7 @@ type {{.Type}}Container struct {
 // operations, with convenience methods for common use cases.
 var {{Title .ContainerName}} = {{.Type}}Container{
 	{{- range .Values}}
-	{{Title .Name}}: {{$.Name}}{
-		{{$.Type}}: {{.Name}},
-	},
+	{{Title .Name}}: {{$.Name}}{ {{.Name}} },
 	{{- end}}
 }
 

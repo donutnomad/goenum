@@ -110,3 +110,6 @@ The codebase uses multiple test files (`test_*.go`) as examples and test cases. 
 - Core Go standard library
 - Optional: `gopkg.in/yaml.v3` for YAML support
 - Build tools: `golangci-lint` for linting
+
+## 注意事项
+使用git mv取代mv
